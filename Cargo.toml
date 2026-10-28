@@ -1,0 +1,28 @@
+# root Cargo.toml
+[workspace]
+resolver = "2"
+members = [
+    "crates/mymuse-core",
+    "firmware",
+]
+
+[profile.dev]
+debug = 2
+debug-assertions = true
+opt-level = 2
+overflow-checks = true
+
+[profile.release]
+debug = 2
+debug-assertions = false
+lto = "fat"
+opt-level = "s"
+overflow-checks = false
+
+[profile.dev.build-override]
+debug = false
+opt-level = 0
+
+[profile.release.build-override]
+debug = false
+opt-level = 0
