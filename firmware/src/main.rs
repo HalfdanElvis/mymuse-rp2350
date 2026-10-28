@@ -1,19 +1,40 @@
-//! Blinks the LED on a Pico board
-//!
-//! This will blink an LED attached to GP25, which is the pin the Pico uses for the on-board LED.
 #![no_std]
 #![no_main]
 
-use defmt::*;
+extern crate alloc;
+
+mod stubs;
+mod traits;
+
+use core::mem::MaybeUninit;
+
+use defmt::info;
 use defmt_rtt as _;
-use embedded_hal::digital::OutputPin;
+use embedded_alloc::LlffHeap as Heap;
 use panic_probe as _;
+
 use rp235x_hal::clocks::init_clocks_and_plls;
 use rp235x_hal::{self as hal, entry};
 use rp235x_hal::{Clock, pac};
 
-use core::mem::MaybeUninit;
-use embedded_alloc::LlffHeap as Heap;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+
+use mymuse_core::app::App;
+use mymuse_core::library::{HANDLED_EXTENSIONS, build_library};
+use mymuse_core::nav::NavState;
+use mymuse_core::system::MockSystemInfo;
+
+use crate::traits::ArtDecoder;
+use crate::traits::AudioOutput;
+use crate::traits::Display;
+use crate::traits::InputSource;
+use crate::traits::Storage;
+use crate::traits::TimeSource;
+
+// ---------------------------------------------------------------------------
+// Global allocator
+// ---------------------------------------------------------------------------
 
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
@@ -21,30 +42,34 @@ static HEAP: Heap = Heap::empty();
 const HEAP_SIZE: usize = 128 * 1024;
 static mut HEAP_MEM: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
 
-// Provide an alias for our BSP so we can switch targets quickly.
-// Uncomment the BSP you included in Cargo.toml, the rest of the code does not need to change.
-// use some_bsp;
+// ---------------------------------------------------------------------------
+// Boot ROM image definition
+// ---------------------------------------------------------------------------
 
-/// Tell the Boot ROM about our application
 #[unsafe(link_section = ".start_block")]
 #[used]
 pub static IMAGE_DEF: hal::block::ImageDef = hal::block::ImageDef::secure_exe();
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
 
 #[entry]
 fn main() -> ! {
     unsafe {
         HEAP.init(core::ptr::addr_of_mut!(HEAP_MEM) as usize, HEAP_SIZE);
     }
-    info!("Program start");
+
+    info!("MyMuse booting");
+
+    // Clock + GPIO setup
     let mut pac = pac::Peripherals::take().unwrap();
-    let core = cortex_m::Peripherals::take().unwrap();
+    let core_periph = cortex_m::Peripherals::take().unwrap();
     let mut watchdog = hal::Watchdog::new(pac.WATCHDOG);
     let sio = hal::Sio::new(pac.SIO);
 
-    // External high-speed crystal on the pico board is 12Mhz
-    let external_xtal_freq_hz = 12_000_000u32;
     let clocks = init_clocks_and_plls(
-        external_xtal_freq_hz,
+        12_000_000u32,
         pac.XOSC,
         pac.CLOCKS,
         pac.PLL_SYS,
@@ -55,49 +80,105 @@ fn main() -> ! {
     .ok()
     .unwrap();
 
-    let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
+    let mut delay =
+        cortex_m::delay::Delay::new(core_periph.SYST, clocks.system_clock.freq().to_Hz());
 
-    let pins = hal::gpio::Pins::new(
+    let _pins = hal::gpio::Pins::new(
         pac.IO_BANK0,
         pac.PADS_BANK0,
         sio.gpio_bank0,
         &mut pac.RESETS,
     );
 
-    // This is the correct pin on the Raspberry Pico 2 board. On other boards, even if they have an
-    // on-board LED, it might need to be changed.
-    //
-    // Notably, on the Pico 2 W, the LED is not connected to any of the RP2350 GPIOs but to the cyw43 module instead.
-    // One way to do that is by using [embassy](https://github.com/embassy-rs/embassy/blob/main/examples/rp/src/bin/wifi_blinky.rs)
-    //
-    // If you have a Pico W and want to toggle a LED with a simple GPIO output pin, you can connect an external
-    // LED to one of the GPIO pins, and reference that pin here. Don't forget adding an appropriate resistor
-    // in series with the LED.
-    let mut led_pin = pins.gpio25.into_push_pull_output();
+    // -----------------------------------------------------------------------
+    // Instantiate hardware (currently stubs).
+    // -----------------------------------------------------------------------
 
-    // Get default theme
-    let s = mymuse_core::settings::Settings::new();
-    defmt::info!("Default theme: {}", s.theme.name());
+    let mut storage = stubs::StubStorage;
+    let mut display = stubs::StubDisplay::new();
+    let mut audio = stubs::StubAudio;
+    let mut input = stubs::StubInput;
+    let mut time = stubs::StubTime::new();
+    let mut decoder = stubs::StubDecoder;
+
+    // -----------------------------------------------------------------------
+    // Boot-time library scan.
+    // -----------------------------------------------------------------------
+
+    info!("scanning library...");
+    let files = storage
+        .list_files(&HANDLED_EXTENSIONS)
+        .unwrap_or_else(|_| Vec::new());
+    info!("found {} audio files", files.len());
+
+    let paths: Vec<_> = files.into_iter().map(|(p, _size)| p).collect();
+    let library = build_library(&paths);
+    info!("library: {} artists", library.len());
+
+    let nav = NavState::new(library);
+    let mut app = App::new(
+        nav,
+        Box::new(MockSystemInfo::new()),
+        1.16, // line_height_ratio
+        0,    // now_ms
+    );
+
+    info!("entering main loop");
+
+    // -----------------------------------------------------------------------
+    // Main loop.
+    // -----------------------------------------------------------------------
 
     loop {
-        info!("on!");
-        led_pin.set_high().unwrap();
-        delay.delay_ms(500);
-        info!("off!");
-        led_pin.set_low().unwrap();
-        delay.delay_ms(500);
+        let now = time.now_ms();
+        let audio_state = audio.state();
+
+        // 1. Drain input
+        while let Some(action) = input.poll() {
+            if let Some(intent) = app.handle_input(action, now, audio_state) {
+                audio.execute(intent);
+            }
+        }
+
+        // 2. Tick
+        if let Some(intent) = app.tick(now, audio_state) {
+            audio.execute(intent);
+        }
+
+        // 3. Lazy album-art decode
+        if let Some(key) = app.current_art_key().cloned() {
+            if !app.art_cache.contains(&key) {
+                if let Some(bytes) = app.nav.get_album_art_bytes(&key.0, &key.1) {
+                    if let Ok(art) = decoder.decode(&bytes) {
+                        app.cache_art(key, art);
+                    }
+                }
+            }
+        }
+
+        // 4. Render
+        let frame = {
+            let measure = |text: &str, size: u16| display.measure_text(text, size);
+            // TODO: read a real clock (RTC or GPS) when hardware lands.
+            app.render(now, &audio_state, "00:00", &measure)
+        };
+        display.present(&frame.cmds, &frame.art);
+
+        // 5. Pace the loop at ~30 fps.
+        delay.delay_ms(33);
     }
 }
 
-/// Program metadata for `picotool info`
+// ---------------------------------------------------------------------------
+// picotool metadata
+// ---------------------------------------------------------------------------
+
 #[unsafe(link_section = ".bi_entries")]
 #[used]
 pub static PICOTOOL_ENTRIES: [rp235x_hal::binary_info::EntryAddr; 5] = [
     rp235x_hal::binary_info::rp_cargo_bin_name!(),
     rp235x_hal::binary_info::rp_cargo_version!(),
-    rp235x_hal::binary_info::rp_program_description!(c"RP2350 Template"),
+    rp235x_hal::binary_info::rp_program_description!(c"MyMuse RP2350"),
     rp235x_hal::binary_info::rp_cargo_homepage_url!(),
     rp235x_hal::binary_info::rp_program_build_attribute!(),
 ];
-
-// End of file

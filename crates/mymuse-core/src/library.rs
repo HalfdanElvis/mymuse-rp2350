@@ -8,7 +8,7 @@ use id3_core::{AttachedPicture, Tag, TextField};
 const UNKNOWN_ARTIST: &str = "Unknown Artist";
 const UNKNOWN_ALBUM: &str = "Unknown Album";
 
-const HANDLED_EXTENSIONS: [&str; 6] = ["mp3", "flac", "m4a", "ogg", "wav", "opus"];
+pub const HANDLED_EXTENSIONS: [&str; 6] = ["mp3", "flac", "m4a", "ogg", "wav", "opus"];
 
 #[derive(Debug, Clone)]
 pub struct Track {
