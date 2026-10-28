@@ -1,0 +1,11 @@
+[package]
+name = "sim"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mymuse-core = { path = "../mymuse-core" }
+mymuse-hal = { path = "../mymuse-hal" }
+
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+fontdue = "0.9"

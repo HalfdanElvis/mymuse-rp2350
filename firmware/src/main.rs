@@ -3,8 +3,8 @@
 
 extern crate alloc;
 
+mod storage;
 mod stubs;
-mod traits;
 
 use core::mem::MaybeUninit;
 
@@ -25,12 +25,12 @@ use mymuse_core::library::{HANDLED_EXTENSIONS, build_library};
 use mymuse_core::nav::NavState;
 use mymuse_core::system::MockSystemInfo;
 
-use crate::traits::ArtDecoder;
-use crate::traits::AudioOutput;
-use crate::traits::Display;
-use crate::traits::InputSource;
-use crate::traits::Storage;
-use crate::traits::TimeSource;
+use mymuse_hal::ArtDecoder;
+use mymuse_hal::AudioOutput;
+use mymuse_hal::Display;
+use mymuse_hal::InputSource;
+use mymuse_hal::Storage;
+use mymuse_hal::TimeSource;
 
 // ---------------------------------------------------------------------------
 // Global allocator
@@ -94,12 +94,19 @@ fn main() -> ! {
     // Instantiate hardware (currently stubs).
     // -----------------------------------------------------------------------
 
-    let mut storage = stubs::StubStorage;
     let mut display = stubs::StubDisplay::new();
     let mut audio = stubs::StubAudio;
     let mut input = stubs::StubInput;
     let mut time = stubs::StubTime::new();
     let mut decoder = stubs::StubDecoder;
+    // ↓ swap to the real one when the board arrives:
+    // let mut storage = storage::SdStorage::new();
+    // Use the storage to scan for files (currently returns empty vec)
+    let mut storage = stubs::StubStorage;
+    let files = storage
+        .list_files(&HANDLED_EXTENSIONS)
+        .unwrap_or_else(|_| Vec::new());
+    info!("found {} audio files", files.len());
 
     // -----------------------------------------------------------------------
     // Boot-time library scan.

@@ -13,7 +13,8 @@ defmt = "1"
 defmt-rtt = "1"
 panic-probe = { version = "1", features = ["print-defmt"] }
 
-mymuse-core = { path = "../crates/mymuse-core"}
+mymuse-core = { path = "../crates/mymuse-core" }
+mymuse-hal = { path = "../crates/mymuse-hal" }
 
 embedded-alloc = "0.7"
 

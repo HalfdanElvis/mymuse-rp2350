@@ -4,6 +4,8 @@ resolver = "2"
 members = [
     "crates/mymuse-core",
     "firmware",
+    "crates/sim",
+    "crates/mymuse-hal",
 ]
 
 [profile.dev]

@@ -16,12 +16,12 @@ use mymuse_core::app::PlaybackIntent;
 use mymuse_core::draw::DrawCmd;
 use mymuse_core::library::AlbumArt;
 
-use crate::traits::ArtDecoder;
-use crate::traits::AudioOutput;
-use crate::traits::Display;
-use crate::traits::InputSource;
-use crate::traits::Storage;
-use crate::traits::TimeSource;
+use mymuse_hal::ArtDecoder;
+use mymuse_hal::AudioOutput;
+use mymuse_hal::Display;
+use mymuse_hal::InputSource;
+use mymuse_hal::Storage;
+use mymuse_hal::TimeSource;
 
 // ---------------------------------------------------------------------------
 // Time
@@ -98,11 +98,7 @@ impl Display for StubDisplay {
         self.frame_count += 1;
         // Log every 30th frame (~once per second at 30 fps).
         if self.frame_count % 30 == 0 {
-            info!(
-                "display: frame {} ({} cmds)",
-                self.frame_count,
-                cmds.len()
-            );
+            info!("display: frame {} ({} cmds)", self.frame_count, cmds.len());
         }
     }
 
