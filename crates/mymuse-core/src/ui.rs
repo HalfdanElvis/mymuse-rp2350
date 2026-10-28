@@ -93,6 +93,7 @@ pub struct UiFrame<'a> {
     pub option_values: Option<&'a [String]>,
     pub line_height_ratio: f32,
     pub theme: &'static ThemeColors,
+    pub pane_art_progress: f32,
 }
 
 // ============================================================================
@@ -368,7 +369,7 @@ pub fn draw_screen<F: Fn(&str, u16) -> f32>(state: &UiFrame, measure: &F) -> Vec
                 y: art_y,
                 w: ART_SIZE as u32,
                 h: ART_SIZE as u32,
-                progress: 1.0,
+                progress: state.pane_art_progress, //1.0
             });
         } else if !state.has_pane_art_prev {
             // Placeholder colored square based on selection index.
@@ -721,6 +722,7 @@ mod tests {
             option_values: None,
             line_height_ratio: 1.16,
             theme: theme::colors(crate::settings::Theme::GrayDark),
+            pane_art_progress: 1.0,
         }
     }
 
