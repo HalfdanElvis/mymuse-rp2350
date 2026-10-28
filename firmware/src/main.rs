@@ -12,6 +12,15 @@ use rp235x_hal::clocks::init_clocks_and_plls;
 use rp235x_hal::{self as hal, entry};
 use rp235x_hal::{Clock, pac};
 
+use core::mem::MaybeUninit;
+use embedded_alloc::LlffHeap as Heap;
+
+#[global_allocator]
+static HEAP: Heap = Heap::empty();
+
+const HEAP_SIZE: usize = 128 * 1024;
+static mut HEAP_MEM: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
+
 // Provide an alias for our BSP so we can switch targets quickly.
 // Uncomment the BSP you included in Cargo.toml, the rest of the code does not need to change.
 // use some_bsp;
@@ -23,6 +32,9 @@ pub static IMAGE_DEF: hal::block::ImageDef = hal::block::ImageDef::secure_exe();
 
 #[entry]
 fn main() -> ! {
+    unsafe {
+        HEAP.init(core::ptr::addr_of_mut!(HEAP_MEM) as usize, HEAP_SIZE);
+    }
     info!("Program start");
     let mut pac = pac::Peripherals::take().unwrap();
     let core = cortex_m::Peripherals::take().unwrap();
@@ -62,6 +74,10 @@ fn main() -> ! {
     // LED to one of the GPIO pins, and reference that pin here. Don't forget adding an appropriate resistor
     // in series with the LED.
     let mut led_pin = pins.gpio25.into_push_pull_output();
+
+    // Get default theme
+    let s = mymuse_core::settings::Settings::new();
+    defmt::info!("Default theme: {}", s.theme.name());
 
     loop {
         info!("on!");

@@ -15,6 +15,8 @@ panic-probe = { version = "1", features = ["print-defmt"] }
 
 mymuse-core = { path = "../crates/mymuse-core"}
 
+embedded-alloc = "0.7"
+
 # We're using a Pico 2 by default on this template
 #rp-pico2 = "0.9" # TODO: Do we have that crate already ?
 
