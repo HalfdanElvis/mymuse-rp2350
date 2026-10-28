@@ -7,6 +7,8 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 cortex-m = "0.7"
 cortex-m-rt = "0.7"
+embedded-sdmmc = "0.10.0"
+embedded-hal-bus = "0.3.0" # For SPI bus sharing if needed later
 embedded-hal = { version = "1.0.0" }
 
 defmt = "1"
