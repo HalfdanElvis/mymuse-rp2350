@@ -7,8 +7,6 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use defmt::info;
-
 use mymuse_core::app::ArtContext;
 use mymuse_core::app::AudioState;
 use mymuse_core::app::InputAction;
@@ -66,12 +64,14 @@ pub struct StubAudio;
 
 impl AudioOutput for StubAudio {
     fn execute(&mut self, intent: PlaybackIntent) {
-        match intent {
-            PlaybackIntent::Play { .. } => info!("audio: play"),
-            PlaybackIntent::Pause => info!("audio: pause"),
-            PlaybackIntent::Resume => info!("audio: resume"),
-            PlaybackIntent::SeekTo(_) => info!("audio: seek"),
-        }
+        /*
+                match intent {
+                    PlaybackIntent::Play { .. } => info!("audio: play"),
+                    PlaybackIntent::Pause => info!("audio: pause"),
+                    PlaybackIntent::Resume => info!("audio: resume"),
+                    PlaybackIntent::SeekTo(_) => info!("audio: seek"),
+                }
+        */
     }
 
     fn state(&self) -> AudioState {
@@ -96,10 +96,12 @@ impl StubDisplay {
 impl Display for StubDisplay {
     fn present(&mut self, cmds: &[DrawCmd], _art: &ArtContext<'_>) {
         self.frame_count += 1;
-        // Log every 30th frame (~once per second at 30 fps).
-        if self.frame_count % 30 == 0 {
-            info!("display: frame {} ({} cmds)", self.frame_count, cmds.len());
-        }
+        /*
+                // Log every 30th frame (~once per second at 30 fps).
+                if self.frame_count % 30 == 0 {
+                    info!("display: frame {} ({} cmds)", self.frame_count, cmds.len());
+                }
+        */
     }
 
     fn measure_text(&self, text: &str, size: u16) -> f32 {

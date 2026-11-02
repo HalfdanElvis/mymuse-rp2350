@@ -1,35 +1,25 @@
-//! SD-card storage implementation using `embedded-sdmmc`.
-//!
-//! When the board arrives, you will:
-//! 1. Initialize the SPI bus at ~12 MHz.
-//! 2. Create the `SdCard` with the SPI device and a `Delay`.
-//! 3. Pass it into `SdStorage::new(...)`.
-//!
-//! The `Storage` trait requires `list_files`, which does a full recursive
-//! directory walk. Because `embedded-sdmmc`'s directory handles are tightly
-//! scoped (you can't hold a reference to a parent while recursing), we use
-//! a stack-based approach that opens and closes subdirectories as it goes.
-
 use alloc::format;
 use alloc::string::{String, ToString};
+use alloc::vec;
 use alloc::vec::Vec;
+use core::ops::ControlFlow;
 
 use mymuse_hal::Storage;
 
+use embedded_io::Write;
 use embedded_sdmmc::{
-    BlockDevice, Directory, Error as SdError, Mode, TimeSource, VolumeIdx, VolumeManager,
+    BlockDevice, Directory, Error as SdError, Mode, TimeSource, Timestamp, VolumeIdx, VolumeManager,
 };
 
-pub struct SdStorage<D, T, const MAX_DIRS: usize, const MAX_FILES: usize, const MAX_VOLUMES: usize>
+pub struct SdStorage<D, T>
 where
     D: BlockDevice,
     T: TimeSource,
 {
-    volume_mgr: VolumeManager<D, T, MAX_DIRS, MAX_FILES, MAX_VOLUMES>,
+    volume_mgr: VolumeManager<D, T, 4, 4, 1>,
 }
 
-impl<D, T, const MAX_DIRS: usize, const MAX_FILES: usize, const MAX_VOLUMES: usize>
-    SdStorage<D, T, MAX_DIRS, MAX_FILES, MAX_VOLUMES>
+impl<D, T> SdStorage<D, T>
 where
     D: BlockDevice,
     T: TimeSource,
@@ -41,8 +31,7 @@ where
     }
 }
 
-impl<D, T, const MAX_DIRS: usize, const MAX_FILES: usize, const MAX_VOLUMES: usize> Storage
-    for SdStorage<D, T, MAX_DIRS, MAX_FILES, MAX_VOLUMES>
+impl<D, T> Storage for SdStorage<D, T>
 where
     D: BlockDevice,
     T: TimeSource,
@@ -51,8 +40,8 @@ where
         let mut out = Vec::new();
         let volume = self.volume_mgr.open_volume(VolumeIdx(0)).map_err(|_| ())?;
         let root_dir = volume.open_root_dir().map_err(|_| ())?;
-        
-        walk_dir(&mut self.volume_mgr, &root_dir, "", extensions, &mut out).map_err(|_| ())?;
+
+        walk_dir(&root_dir, "", extensions, &mut out).map_err(|_| ())?;
         out.sort();
         Ok(out)
     }
@@ -60,15 +49,14 @@ where
     fn read_file(&mut self, path: &str, max_bytes: usize) -> Result<Vec<u8>, ()> {
         let volume = self.volume_mgr.open_volume(VolumeIdx(0)).map_err(|_| ())?;
         let root_dir = volume.open_root_dir().map_err(|_| ())?;
-        let mut file = self
-            .volume_mgr
-            .open_file_in_dir(root_dir, path, Mode::ReadOnly)
+        let file = root_dir
+            .open_file_in_dir(path, Mode::ReadOnly)
             .map_err(|_| ())?;
 
         let mut buf = Vec::new();
         let mut chunk = [0u8; 512];
         loop {
-            let n = self.volume_mgr.read(&mut file, &mut chunk).map_err(|_| ())?;
+            let n = file.read(&mut chunk).map_err(|_| ())?;
             if n == 0 {
                 break;
             }
@@ -84,22 +72,16 @@ where
     fn read_at(&mut self, path: &str, offset: u32, len: usize) -> Result<Vec<u8>, ()> {
         let volume = self.volume_mgr.open_volume(VolumeIdx(0)).map_err(|_| ())?;
         let root_dir = volume.open_root_dir().map_err(|_| ())?;
-        let mut file = self
-            .volume_mgr
-            .open_file_in_dir(root_dir, path, Mode::ReadOnly)
+        let file = root_dir
+            .open_file_in_dir(path, Mode::ReadOnly)
             .map_err(|_| ())?;
 
-        self.volume_mgr
-            .seek(&mut file, embedded_sdmmc::SeekFrom::Start(offset))
-            .map_err(|_| ())?;
+        file.seek_from_start(offset).map_err(|_| ())?;
 
         let mut buf = vec![0u8; len];
         let mut read_bytes = 0;
         while read_bytes < len {
-            let n = self
-                .volume_mgr
-                .read(&mut file, &mut buf[read_bytes..])
-                .map_err(|_| ())?;
+            let n = file.read(&mut buf[read_bytes..]).map_err(|_| ())?;
             if n == 0 {
                 break;
             }
@@ -112,14 +94,13 @@ where
     fn write_file(&mut self, path: &str, data: &[u8]) -> Result<(), ()> {
         let volume = self.volume_mgr.open_volume(VolumeIdx(0)).map_err(|_| ())?;
         let root_dir = volume.open_root_dir().map_err(|_| ())?;
-        
-        // Note: embedded-sdmmc's Mode::ReadWrite creates or overwrites depending on config
-        let file = self
-            .volume_mgr
-            .open_file_in_dir(root_dir, path, Mode::ReadWriteCreateOrTruncate)
+
+        let mut file = root_dir
+            .open_file_in_dir(path, Mode::ReadWriteCreateOrTruncate)
             .map_err(|_| ())?;
 
-        self.volume_mgr.write(&mut file, data).map_err(|_| ())?;
+        file.write_all(data).map_err(|_| ())?;
+        file.flush().map_err(|_| ())?;
         Ok(())
     }
 
@@ -130,26 +111,19 @@ where
         let Ok(root_dir) = volume.open_root_dir() else {
             return false;
         };
-        self.volume_mgr
-            .open_file_in_dir(root_dir, path, Mode::ReadOnly)
-            .is_ok()
+        root_dir.open_file_in_dir(path, Mode::ReadOnly).is_ok()
     }
 
     fn file_size(&mut self, path: &str) -> Option<u32> {
         let volume = self.volume_mgr.open_volume(VolumeIdx(0)).ok()?;
         let root_dir = volume.open_root_dir().ok()?;
-        let file = self
-            .volume_mgr
-            .open_file_in_dir(root_dir, path, Mode::ReadOnly)
-            .ok()?;
+        let file = root_dir.open_file_in_dir(path, Mode::ReadOnly).ok()?;
         Some(file.length())
     }
 }
 
-/// Recursive directory walker.
-fn walk_dir<D, T, const MAX_DIRS: usize, const MAX_FILES: usize, const MAX_VOLUMES: usize>(
-    volume_mgr: &mut VolumeManager<D, T, MAX_DIRS, MAX_FILES, MAX_VOLUMES>,
-    dir: &Directory,
+fn walk_dir<D, T>(
+    dir: &Directory<'_, D, T, 4, 4, 1>,
     current_path: &str,
     exts: &[&str],
     out: &mut Vec<(String, u32)>,
@@ -158,20 +132,21 @@ where
     D: BlockDevice,
     T: TimeSource,
 {
-    volume_mgr.iterate_dir(dir, |entry| {
-        if entry.attributes.contains(embedded_sdmmc::Attributes::DIRECTORY) {
-            if entry.name.to_string() == "." || entry.name.to_string() == ".." {
-                return;
+    dir.iterate_dir(|entry| {
+        if entry.attributes.is_directory() {
+            let name = entry.name.to_string();
+            if name == "." || name == ".." {
+                return ControlFlow::Continue(());
             }
             let subdir_path = if current_path.is_empty() {
-                entry.name.to_string()
+                name
             } else {
-                format!("{}/{}", current_path, entry.name)
+                format!("{}/{}", current_path, name)
             };
 
-            // Open subdirectory, recurse, then it gets dropped
-            if let Ok(subdir) = volume_mgr.open_dir(dir, &entry.name.to_string()) {
-                let _ = walk_dir(volume_mgr, &subdir, &subdir_path, exts, out);
+            // Pass entry.name directly (it implements ToShortFileName)
+            if let Ok(subdir) = dir.open_dir(entry.name) {
+                let _ = walk_dir(&subdir, &subdir_path, exts, out);
             }
         } else {
             let name = entry.name.to_string();
@@ -185,5 +160,23 @@ where
                 out.push((file_path, entry.size));
             }
         }
+        ControlFlow::Continue(())
     })
+}
+
+// Add this at the bottom of storage.rs to satisfy the TimeSource requirement
+
+pub struct DummyTimeSource;
+
+impl TimeSource for DummyTimeSource {
+    fn get_timestamp(&self) -> Timestamp {
+        Timestamp {
+            year_since_1970: 0,
+            zero_indexed_month: 0,
+            zero_indexed_day: 0,
+            hours: 0,
+            minutes: 0,
+            seconds: 0,
+        }
+    }
 }

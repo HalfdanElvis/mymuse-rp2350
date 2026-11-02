@@ -8,11 +8,10 @@ license = "MIT OR Apache-2.0"
 cortex-m = "0.7"
 cortex-m-rt = "0.7"
 embedded-sdmmc = "0.10.0"
+embedded-io = "0.7.1"
 embedded-hal-bus = "0.3.0" # For SPI bus sharing if needed later
 embedded-hal = { version = "1.0.0" }
 
-defmt = "1"
-defmt-rtt = "1"
 panic-probe = { version = "1", features = ["print-defmt"] }
 
 mymuse-core = { path = "../crates/mymuse-core" }
@@ -30,5 +29,10 @@ rp235x-hal = { version = "0.3", features = [
     "binary-info",
 ] }
 
+panic-halt = "1.0.0"
+usb-device = "0.3"
+usbd-serial = "0.2"
+
+critical-section = "1.2"
 
 

@@ -2,8 +2,7 @@
 # Choose a default "cargo run" tool (see README for more info)
 # - `probe-rs` provides flashing and defmt via a hardware debugger, and stack unwind on panic
 # - `picotool` loads an elf, skipping unchanged flash sectors, verify it, and execute it
-runner = "probe-rs run --chip RP235x --protocol swd"
-
+runner = "elf2flash deploy -t -s"
 # Use flip-link to ensure safety on stack overflow.
 # Comment this out to disable it.
 linker = "flip-link"
@@ -21,7 +20,6 @@ linker = "flip-link"
 rustflags = [
     "-C", "link-arg=--nmagic",
     "-C", "link-arg=-Tlink.x",
-    "-C", "link-arg=-Tdefmt.x",
     "-C", "target-cpu=cortex-m33",
 ]
 
