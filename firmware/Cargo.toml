@@ -11,6 +11,10 @@ embedded-sdmmc = "0.10.0"
 embedded-io = "0.7.1"
 embedded-hal-bus = "0.3.0" # For SPI bus sharing if needed later
 embedded-hal = { version = "1.0.0" }
+mipidsi = "0.8.0"
+display-interface-spi = "0.5.0"
+embedded-graphics = "0.8.1"
+fugit = "0.3.7"
 
 panic-probe = { version = "1", features = ["print-defmt"] }
 
