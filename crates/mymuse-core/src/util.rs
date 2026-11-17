@@ -54,7 +54,10 @@ mod tests {
     fn level_title_covers_every_variant() {
         assert_eq!(level_title(&Level::Root), "MyMuse");
         assert_eq!(level_title(&Level::Settings), "Settings");
-        assert_eq!(level_title(&Level::TracksOf("A".into(), "B".into())), "A - B");
+        assert_eq!(
+            level_title(&Level::TracksOf("A".into(), "B".into())),
+            "A - B"
+        );
     }
 
     #[test]

@@ -9,9 +9,7 @@ use mymuse_core::app::{ArtContext, AudioState, InputAction, PlaybackIntent};
 use mymuse_core::draw::DrawCmd;
 use mymuse_core::library::AlbumArt;
 
-use mymuse_hal::{
-    ArtDecoder, AudioOutput, Display, InputSource, Storage, TimeSource,
-};
+use mymuse_hal::{ArtDecoder, AudioOutput, Display, InputSource, Storage, TimeSource};
 
 // ---------------------------------------------------------------------------
 // Time
@@ -58,9 +56,7 @@ impl ButtonState {
             self.candidate_polls = 1;
         }
 
-        if self.candidate_polls >= DEBOUNCE_POLLS
-            && self.stable_pressed != self.candidate_pressed
-        {
+        if self.candidate_polls >= DEBOUNCE_POLLS && self.stable_pressed != self.candidate_pressed {
             self.stable_pressed = self.candidate_pressed;
             return self.stable_pressed;
         }

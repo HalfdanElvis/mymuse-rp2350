@@ -50,7 +50,12 @@ impl CacheEntry {
         let offset = u32::from_le_bytes([buf[16], buf[17], buf[18], buf[19]]);
         let width = u16::from_le_bytes([buf[20], buf[21]]);
         let height = u16::from_le_bytes([buf[22], buf[23]]);
-        Self { key, offset, width, height }
+        Self {
+            key,
+            offset,
+            width,
+            height,
+        }
     }
 }
 
@@ -85,10 +90,12 @@ impl CacheHeader {
         }
         let entry_count = u32::from_le_bytes([buf[6], buf[7], buf[8], buf[9]]);
         let library_digest = u64::from_le_bytes([
-            buf[10], buf[11], buf[12], buf[13],
-            buf[14], buf[15], buf[16], buf[17],
+            buf[10], buf[11], buf[12], buf[13], buf[14], buf[15], buf[16], buf[17],
         ]);
-        Some(Self { entry_count, library_digest })
+        Some(Self {
+            entry_count,
+            library_digest,
+        })
     }
 }
 
@@ -146,10 +153,7 @@ mod tests {
 
     #[test]
     fn album_key_is_deterministic() {
-        assert_eq!(
-            album_key("Artist", "Album"),
-            album_key("Artist", "Album")
-        );
+        assert_eq!(album_key("Artist", "Album"), album_key("Artist", "Album"));
     }
 
     #[test]
@@ -170,7 +174,10 @@ mod tests {
 
     #[test]
     fn header_roundtrips() {
-        let h = CacheHeader { entry_count: 42, library_digest: 0xDEADBEEF };
+        let h = CacheHeader {
+            entry_count: 42,
+            library_digest: 0xDEADBEEF,
+        };
         let mut buf = [0u8; HEADER_SIZE];
         h.write_to(&mut buf);
         let parsed = CacheHeader::from_bytes(&buf).unwrap();
@@ -187,7 +194,10 @@ mod tests {
 
     #[test]
     fn header_rejects_bad_version() {
-        let h = CacheHeader { entry_count: 1, library_digest: 0 };
+        let h = CacheHeader {
+            entry_count: 1,
+            library_digest: 0,
+        };
         let mut buf = [0u8; HEADER_SIZE];
         h.write_to(&mut buf);
         buf[4] = 99; // corrupt version
@@ -212,8 +222,18 @@ mod tests {
         let key_a = album_key("A", "Album");
         let key_b = album_key("B", "Album");
         let mut entries = [
-            CacheEntry { key: key_a, offset: 0, width: 128, height: 128 },
-            CacheEntry { key: key_b, offset: 65536, width: 128, height: 128 },
+            CacheEntry {
+                key: key_a,
+                offset: 0,
+                width: 128,
+                height: 128,
+            },
+            CacheEntry {
+                key: key_b,
+                offset: 65536,
+                width: 128,
+                height: 128,
+            },
         ];
         entries.sort_by(|a, b| a.key.cmp(&b.key));
         assert!(lookup(&entries, "A", "Album").is_some());
